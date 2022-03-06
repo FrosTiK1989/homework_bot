@@ -17,7 +17,7 @@ logging.basicConfig(
     level=logging.INFO,
 )
 
-PRACTICUM_TOKEN = os.getenv("TOKEN_YANDEX")
+PRACTICUM_TOKEN = os.getenv("PRACTICUM_TOKEN")
 TELEGRAM_TOKEN = os.getenv("TOKEN_TELEGRAM")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT")
 
@@ -35,10 +35,12 @@ HOMEWORK_STATUSES = {
 
 def send_message(bot, message):
     """Отправка сообщения в канал."""
-    chat_id = TELEGRAM_CHAT_ID
-    text = "Письмо пришло!"
-    bot.send_message(chat_id, message=text)
-    logging.info("Сообщение ушло адресату")
+    try:
+        bot.send_message(TELEGRAM_CHAT_ID, text=message)
+        logging.info("Сообщение ушло клиенту")
+    except telegram.TelegramError(message):
+        message = "Ошибка при отправке сообщения"
+        logging.error(message)
 
 
 def get_api_answer(current_timestamp):
@@ -47,12 +49,12 @@ def get_api_answer(current_timestamp):
     params = {"from_date": timestamp}
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params=params)
-        if response.status_code != HTTPStatus.OK:
+        if response.status_code == HTTPStatus.OK:
+            return response.json()
+        else:
             status_code = response.status_code
             logging.error(f"Ошибка {status_code}")
             raise Exception(f"Ошибка {status_code}")
-        else:
-            return response.json()
     except Exception as error:
         logging.error(f"Есть ошибки при запросе {error}")
         raise Exception(f"Есть ошибки при запросе {error}")
@@ -123,9 +125,11 @@ def main():
     while True:
         try:
             response = get_api_answer(current_timestamp)
+            # print(response)
             homeworks = check_response(response)
             if len(homeworks) == 0:
                 logging.debug("У тебя нет новых работ")
+                # print(homeworks)
             else:
                 homework = homeworks[0]
                 message = parse_status(homework)
