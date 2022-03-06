@@ -1,6 +1,6 @@
 import logging
 import os
-from datetime import time
+import time
 from http import HTTPStatus
 
 import requests
@@ -36,9 +36,8 @@ HOMEWORK_STATUSES = {
 def send_message(bot, message):
     """Отправка сообщения в канал."""
     chat_id = TELEGRAM_CHAT_ID
-    bot = telegram.Bot(TELEGRAM_TOKEN)
-    message = "Письмо пришло!"
-    bot.send_message(chat_id, message)
+    text = "Письмо пришло!"
+    bot.send_message(chat_id, message=text)
     logging.info("Сообщение ушло адресату")
 
 
