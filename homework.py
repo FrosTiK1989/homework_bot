@@ -130,7 +130,7 @@ def main():
         try:
             response = get_api_answer(current_timestamp)
             homeworks = check_response(response)
-            if len(homeworks):
+            if len(homeworks) == 0:
                 logger.debug("У тебя нет новых работ")
             else:
                 current_report["name"] = homeworks[0]["homework_name"]
