@@ -5,7 +5,6 @@ import os
 import sys
 import time
 from http import HTTPStatus
-from sqlite3 import DataError
 
 import requests
 import telegram
@@ -16,7 +15,7 @@ import exception
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 handler = logging.StreamHandler(sys.stdout)
 logger.addHandler(handler)
 formatter = logging.Formatter(
@@ -29,7 +28,7 @@ PRACTICUM_TOKEN = os.getenv("PRACTICUM_TOKEN")
 TELEGRAM_TOKEN = os.getenv("TOKEN_TELEGRAM")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT")
 
-RETRY_TIME = 600
+RETRY_TIME = 60
 ENDPOINT = "https://practicum.yandex.ru/api/user_api/homework_statuses/"
 HEADERS = {"Authorization": f"OAuth {PRACTICUM_TOKEN}"}
 
@@ -54,15 +53,19 @@ def send_message(bot, message):
 def get_api_answer(current_timestamp):
     """Получаем ответ от API."""
     timestamp = current_timestamp or int(time.time())
-    params = {"from_date": timestamp}
+    request_params = {
+        "url": ENDPOINT,
+        "headers": HEADERS,
+        "params": {"from_date": timestamp},
+    }
     try:
         logger.info("Проверяем ответ API")
-        response = requests.get(ENDPOINT, headers=HEADERS, params=params)
-        if response.status_code == HTTPStatus.OK:
-            return response.json()
+        response = requests.get(**request_params)
         if response.status_code != HTTPStatus.OK:
             status_code = response.status_code
+            logger.debug(f"Запрос вернул {status_code}")
             raise Exception(f"Ошибка {status_code}")
+        return response.json()
     except Exception as error:
         logger.error(f"Есть ошибки при запросе {error}")
         raise Exception(f"Есть ошибки при запросе {error}")
@@ -74,12 +77,12 @@ def check_response(response):
     if not isinstance(response, dict):
         raise TypeError("Ответ от API не словарь!")
     if "homeworks" not in response:
-        raise IndexError("Домашки нет в ответе от API")
+        raise KeyError("Домашки нет в ответе от API")
     if "current_date" not in response:
-        raise DataError("Траблы с датой")
+        raise KeyError("Траблы с датой")
     if not isinstance(response["homeworks"], list):
-        raise exception.NegativeValueException("Домшка не в списке пришла")
-    if response["homeworks"] is None:
+        raise TypeError("Домшка не в списке пришла")
+    if not response["homeworks"]:
         raise exception.NegativeValueException("Список заданий пуст, ожидай")
     homework = response["homeworks"]
     return homework
@@ -122,15 +125,15 @@ def main():
         current_timestamp = int(time.time())
     else:
         logger.critical("Отсутствуют необходимые токены")
-        raise SystemExit("Отсутствуют токены!")
+        raise sys.exit("Отсутствуют токены!")
     while True:
         try:
             response = get_api_answer(current_timestamp)
             homeworks = check_response(response)
-            if len(homeworks) == 0:
+            if homeworks:
                 logger.debug("У тебя нет новых работ")
             else:
-                homework = homeworks[0]
+                homework = homeworks
                 current_report["name"] = homework.get("homework_name")
                 message = parse_status(homework)
                 current_report["message"] = message
@@ -138,12 +141,14 @@ def main():
                     send_message(bot, message)
                     prev_report = current_report.copy()
             current_timestamp = int(time.time())
-            time.sleep(RETRY_TIME)
 
         except Exception as error:
             message = f"Сбой в работе программы: {error}"
-            logger.error(message, exc_info=True)
-            send_message(bot, message)
+            current_report["output"] = message
+            if current_report != prev_report:
+                logger.error(message, exc_info=True)
+                send_message(bot, message)
+                prev_report = current_report.copy()
         finally:
             time.sleep(RETRY_TIME)
 
