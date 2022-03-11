@@ -82,7 +82,7 @@ def check_response(response):
         raise KeyError("Траблы с датой")
     if not isinstance(response["homeworks"], list):
         raise TypeError("Домшка не в списке пришла")
-    if not response["homeworks"]:
+    if response["homeworks"] is None:
         raise exception.NegativeValueException("Список заданий пуст, ожидай")
     homework = response["homeworks"]
     return homework
@@ -130,21 +130,19 @@ def main():
         try:
             response = get_api_answer(current_timestamp)
             homeworks = check_response(response)
-            if homeworks:
+            if len(homeworks):
                 logger.debug("У тебя нет новых работ")
             else:
-                homework = homeworks
-                current_report["name"] = homework.get("homework_name")
-                message = parse_status(homework)
-                current_report["message"] = message
+                current_report["name"] = homeworks[0]["homework_name"]
+                current_report["message"] = parse_status(homeworks[0])
                 if current_report != prev_report:
-                    send_message(bot, message)
+                    send_message(bot, current_report)
                     prev_report = current_report.copy()
             current_timestamp = int(time.time())
 
         except Exception as error:
             message = f"Сбой в работе программы: {error}"
-            current_report["output"] = message
+            current_report["message"] = message
             if current_report != prev_report:
                 logger.error(message, exc_info=True)
                 send_message(bot, message)
